@@ -87,7 +87,7 @@ class JointsOHKMMSELoss(nn.Module):
         return self.ohkm(loss)
 
 # soft-argmax
-def get_max_preds_soft_pt(batch_heatmaps):
+""" def get_max_preds_soft_pt(batch_heatmaps):
     # pytorch version of the above function using tensors
     assert len(batch_heatmaps.shape) == 4, 'batch_images should be 4-ndim'
     batch_size = batch_heatmaps.shape[0]
@@ -111,7 +111,33 @@ def get_max_preds_soft_pt(batch_heatmaps):
     x = x.sum(dim = 2, keepdim=True)
     y = y.sum(dim = 2, keepdim=True)
     preds = torch.cat([x, y], dim=2)
+    return preds, maxvals """
+def get_max_preds_soft_pt(batch_heatmaps):
+    assert len(batch_heatmaps.shape) == 4, 'batch_images should be 4-ndim'
+    batch_size = batch_heatmaps.shape[0]
+    num_joints = batch_heatmaps.shape[1]
+    height = batch_heatmaps.shape[2]
+    width = batch_heatmaps.shape[3]
+
+    heatmaps_reshaped = batch_heatmaps.view((batch_size, num_joints, -1))
+    maxvals = heatmaps_reshaped.max(dim=2)[0].view((batch_size, num_joints, 1))
+    heatmaps_reshaped = F.softmax(heatmaps_reshaped, dim=2)
+    batch_heatmaps = heatmaps_reshaped.view(batch_size, num_joints, height, width)
+
+    x = batch_heatmaps.sum(dim=2)
+    y = batch_heatmaps.sum(dim=3)
+
+    device = batch_heatmaps.device  # GPUでもCPUでもOK
+
+    x_indices = torch.arange(width, device=device, dtype=torch.float32).view(1, 1, width)
+    y_indices = torch.arange(height, device=device, dtype=torch.float32).view(1, 1, height)
+
+    x = (x * x_indices).sum(dim=2, keepdim=True)
+    y = (y * y_indices).sum(dim=2, keepdim=True)
+
+    preds = torch.cat([x, y], dim=2)
     return preds, maxvals
+
 
 class JointsCoordinateLoss(nn.Module):
     def __init__(self, use_target_weight, loss_type='sl1', image_size=(384, 288)):
